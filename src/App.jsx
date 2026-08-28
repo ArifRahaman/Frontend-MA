@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 
-// In dev this is empty -> Vite proxies /api to localhost:4001.
-// In production, set VITE_API_BASE to your backend URL.
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+// Where the backend lives.
+//  - dev: empty string -> Vite proxies /api to localhost:4001
+//  - production: the deployed Render backend
+// VITE_API_BASE overrides both if it is set at build time.
+const PROD_API_BASE = "https://backend-ma-83fc.onrender.com";
+const API_BASE =
+  import.meta.env.VITE_API_BASE || (import.meta.env.DEV ? "" : PROD_API_BASE);
 
 const GREETING = {
   role: "assistant",
   content:
-    "Assalamu alaikum Iffat! 🌸 Aap kaisi hain? Kuch bhi poochhiye — kaam ho, ya bas aise hi baat karni ho, main yahin hoon 😊",
+    "Assalamu alaikum Iffat! 💙 Main Arif hoon — kuch bhi poochhiye, kaam ho ya bas aise hi baat karni ho, hamesha yahin hoon 😊",
 };
+
+
 
 export default function App() {
   const [messages, setMessages] = useState([GREETING]);
@@ -143,36 +149,74 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* -------- Sidebar -------- */}
       <aside className="sidebar">
-        <button className="new-chat" onClick={newChat}>
-          <span>✨</span> New chat
+        {/* Brand */}
+        <div className="sidebar-brand">
+          <div className="sidebar-brand-avatar">👨</div>
+          <div className="sidebar-brand-text">
+            <div className="sidebar-brand-name">Arif</div>
+            <div className="sidebar-brand-sub">Your personal AI</div>
+          </div>
+        </div>
+
+        <button className="new-chat" id="new-chat-btn" onClick={newChat}>
+          <span>✨</span>
+          <span className="new-chat-label">New conversation</span>
         </button>
 
         <div className="sidebar-note">
-          <div className="sidebar-title">Iffat's AI</div>
+          <div className="sidebar-title">Arif 💙</div>
           <p>
-            Aapka apna AI assistant 🌸 kaam ho ya casual baat — kuch bhi
-            poochhiye, main hamesha yahin hoon.
+            Main Arif hoon — Iffat ka apna AI companion. Kaam ho ya casual
+            baat, sab ke liye hamesha yahin hoon 😊
           </p>
         </div>
 
-        <div className="sidebar-footer">powered by Azure OpenAI · gpt-4o</div>
+        <div className="sidebar-status">
+          <div className="status-dot" />
+          <div className="status-text">
+            <span className="status-name">Arif</span> is online
+          </div>
+        </div>
+
+        <div className="sidebar-footer">
+          powered by Azure OpenAI · gpt-4o<br />
+          made with 💙 for Iffat
+        </div>
       </aside>
 
+      {/* -------- Main Chat -------- */}
       <main className="chat">
         <header className="chat-header">
           <div className="brand">
-            <span className="brand-emoji">🌸</span>
-            <span className="brand-name">Iffat</span>
+            <div className="brand-avatar">👨</div>
+            <div className="brand-info">
+              <div className="brand-name">Arif</div>
+              <div className="brand-sub">● Online</div>
+            </div>
           </div>
-          {isStreaming && <span className="live-dot">typing…</span>}
+          <div className="header-right">
+            {isStreaming && (
+              <span className="live-dot">typing…</span>
+            )}
+          </div>
         </header>
 
+        {/* Messages */}
         <div className="messages" ref={scrollRef}>
           <div className="messages-inner">
             {!hasConversation && (
               <div className="hero">
-                <div className="hero-emoji">🌸</div>
+                <div className="hero-glow">
+                  <div className="hero-ring-2" />
+                  <div className="hero-ring" />
+                  <div className="hero-avatar">👨</div>
+                </div>
+                <h1>Arif</h1>
+                <p className="hero-sub">
+                  Assalamu alaikum Iffat! 💙 Kya poochhna chahti hain aaj?
+                </p>
               </div>
             )}
 
@@ -191,26 +235,29 @@ export default function App() {
           </div>
         </div>
 
+        {/* Composer */}
         <div className="composer">
           <div className="composer-inner">
             <textarea
               ref={textareaRef}
+              id="chat-input"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKeyDown}
-              placeholder="type something…"
+              placeholder="Kuch bhi poochhiye Iffat…"
               rows={1}
             />
             {isStreaming ? (
-              <button className="send stop" onClick={stop} title="Stop">
+              <button className="send stop" id="stop-btn" onClick={stop} title="Stop generating">
                 ◼
               </button>
             ) : (
               <button
                 className="send"
+                id="send-btn"
                 onClick={() => sendMessage()}
                 disabled={!input.trim()}
-                title="Send"
+                title="Send message"
               >
                 ➤
               </button>
@@ -218,7 +265,7 @@ export default function App() {
           </div>
           <div className="disclaimer">
             AI se galti ho sakti hai — important cheezein ek baar verify kar
-            lijiye 🌸
+            lijiye 💙
           </div>
         </div>
       </main>
@@ -230,7 +277,7 @@ function Message({ role, content, streaming }) {
   const isUser = role === "user";
   return (
     <div className={`msg ${isUser ? "user" : "assistant"}`}>
-      <div className="avatar">{isUser ? "🧕" : "🌸"}</div>
+      <div className="avatar">{isUser ? "🧕" : "👨"}</div>
       <div className="bubble">
         {renderContent(content)}
         {streaming && <span className="cursor" />}
