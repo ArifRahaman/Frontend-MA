@@ -14,6 +14,11 @@ const GREETING = {
     "Assalamu alaikum Iffat! 💙 Main Arif hoon — kuch bhi poochhiye, kaam ho ya bas aise hi baat karni ho, hamesha yahin hoon 😊",
 };
 
+// Voice (text-to-speech) is built and working, but parked for now — flip
+// this back to true to bring back the mute toggle, auto-play, and the
+// per-message 🔊 replay button without touching anything else.
+const VOICE_ENABLED = false;
+
 
 
 export default function App() {
@@ -165,8 +170,20 @@ export default function App() {
               setMessages((prev) => {
                 const next = [...prev];
                 next[next.length - 1] = {
+                  ...next[next.length - 1],
                   role: "assistant",
                   content: next[next.length - 1].content + json.delta,
+                };
+                return next;
+              });
+            }
+            if (json.song) {
+              setMessages((prev) => {
+                const next = [...prev];
+                next[next.length - 1] = {
+                  ...next[next.length - 1],
+                  role: "assistant",
+                  song: json.song,
                 };
                 return next;
               });
@@ -178,7 +195,7 @@ export default function App() {
         }
       }
 
-      if (voiceOn && assistantText.trim()) {
+      if (VOICE_ENABLED && voiceOn && assistantText.trim()) {
         speak(assistantText, assistantIndex);
       }
     } catch (err) {
@@ -277,13 +294,15 @@ export default function App() {
             {isStreaming && (
               <span className="live-dot">typing…</span>
             )}
-            <button
-              className={`voice-toggle${voiceOn ? " on" : ""}`}
-              onClick={toggleVoice}
-              title={voiceOn ? "Voice on — click to mute" : "Voice off — click to unmute"}
-            >
-              {voiceOn ? "🔊" : "🔇"}
-            </button>
+            {VOICE_ENABLED && (
+              <button
+                className={`voice-toggle${voiceOn ? " on" : ""}`}
+                onClick={toggleVoice}
+                title={voiceOn ? "Voice on — click to mute" : "Voice off — click to unmute"}
+              >
+                {voiceOn ? "🔊" : "🔇"}
+              </button>
+            )}
           </div>
         </header>
 
@@ -309,6 +328,7 @@ export default function App() {
                 key={i}
                 role={m.role}
                 content={m.content}
+                song={m.song}
                 streaming={
                   isStreaming &&
                   i === messages.length - 1 &&
@@ -316,7 +336,7 @@ export default function App() {
                 }
                 speaking={speakingIndex === i}
                 onSpeak={
-                  m.role === "assistant" && m.content.trim()
+                  VOICE_ENABLED && m.role === "assistant" && m.content.trim()
                     ? () =>
                         speakingIndex === i ? stopSpeaking() : speak(m.content, i)
                     : undefined
@@ -364,7 +384,7 @@ export default function App() {
   );
 }
 
-function Message({ role, content, streaming, speaking, onSpeak }) {
+function Message({ role, content, song, streaming, speaking, onSpeak }) {
   const isUser = role === "user";
   return (
     <div className={`msg ${isUser ? "user" : "assistant"}`}>
@@ -372,6 +392,7 @@ function Message({ role, content, streaming, speaking, onSpeak }) {
       <div className="bubble">
         {renderContent(content)}
         {streaming && <span className="cursor" />}
+        {song && <SongCard song={song} />}
         {onSpeak && !streaming && (
           <button
             className={`bubble-speak${speaking ? " speaking" : ""}`}
@@ -383,6 +404,37 @@ function Message({ role, content, streaming, speaking, onSpeak }) {
         )}
       </div>
     </div>
+  );
+}
+
+// Thumbnail + play button that swaps to a live YouTube embed on click —
+// nothing autoplays until Iffat actually taps it.
+function SongCard({ song }) {
+  const [playing, setPlaying] = useState(false);
+
+  if (playing) {
+    return (
+      <div className="song-card song-card-playing">
+        <iframe
+          className="song-embed"
+          src={`https://www.youtube.com/embed/${song.videoId}?autoplay=1`}
+          title={song.title}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button className="song-card" onClick={() => setPlaying(true)} title="Play on YouTube">
+      {song.thumbnail && <img className="song-thumb" src={song.thumbnail} alt="" />}
+      <span className="song-play-badge">▶</span>
+      <span className="song-info">
+        <span className="song-title">{song.title}</span>
+        {song.channel && <span className="song-channel">{song.channel}</span>}
+      </span>
+    </button>
   );
 }
 
