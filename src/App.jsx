@@ -33,6 +33,7 @@ export default function App() {
     }
   });
   const [speakingIndex, setSpeakingIndex] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
   const abortRef = useRef(null);
@@ -232,6 +233,7 @@ export default function App() {
     stopSpeaking();
     setMessages([GREETING]);
     setInput("");
+    setSidebarOpen(false);
   }
 
   function onKeyDown(e) {
@@ -243,15 +245,29 @@ export default function App() {
 
   return (
     <div className="app">
+      {/* Tap-out backdrop for the mobile drawer */}
+      {sidebarOpen && (
+        <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* -------- Sidebar -------- */}
-      <aside className="sidebar">
+      <aside className={`sidebar${sidebarOpen ? " open" : ""}`}>
         {/* Brand */}
-        <div className="sidebar-brand">
-          <div className="sidebar-brand-avatar">👨</div>
-          <div className="sidebar-brand-text">
-            <div className="sidebar-brand-name">Arif</div>
-            <div className="sidebar-brand-sub">Your personal AI</div>
+        <div className="sidebar-top">
+          <div className="sidebar-brand">
+            <div className="sidebar-brand-avatar">👨</div>
+            <div className="sidebar-brand-text">
+              <div className="sidebar-brand-name">Arif</div>
+              <div className="sidebar-brand-sub">Your personal AI</div>
+            </div>
           </div>
+          <button
+            className="sidebar-close"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close menu"
+          >
+            ✕
+          </button>
         </div>
 
         <button className="new-chat" id="new-chat-btn" onClick={newChat}>
@@ -283,11 +299,20 @@ export default function App() {
       {/* -------- Main Chat -------- */}
       <main className="chat">
         <header className="chat-header">
-          <div className="brand">
-            <div className="brand-avatar">👨</div>
-            <div className="brand-info">
-              <div className="brand-name">Arif</div>
-              <div className="brand-sub">● Online</div>
+          <div className="header-left">
+            <button
+              className="menu-btn"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open menu"
+            >
+              ☰
+            </button>
+            <div className="brand">
+              <div className="brand-avatar">👨</div>
+              <div className="brand-info">
+                <div className="brand-name">Arif</div>
+                <div className="brand-sub">● Online</div>
+              </div>
             </div>
           </div>
           <div className="header-right">
