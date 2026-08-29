@@ -33,7 +33,6 @@ export default function App() {
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [pendingImage, setPendingImage] = useState(null);
-  const [ttsAvailable, setTtsAvailable] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [theme, setTheme] = useState(() => {
     try {
@@ -56,23 +55,6 @@ export default function App() {
       // ignore storage failures (private browsing, etc.)
     }
   }, [theme]);
-
-  // Ask the backend once whether voice is configured. If Sarvam isn't set
-  // up, the voice-note players stay hidden rather than sitting there dead.
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${API_BASE}/api/health`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!cancelled && d?.tts) setTtsAvailable(true);
-      })
-      .catch(() => {
-        // offline or backend asleep — just leave voice notes hidden
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // auto-scroll to bottom on new content
   useEffect(() => {
@@ -116,7 +98,6 @@ export default function App() {
     setInput("");
     setPendingImage(null);
     setIsStreaming(true);
-    stopAnyVoiceNote();
     blip("send");
 
     const controller = new AbortController();
@@ -224,7 +205,6 @@ export default function App() {
 
   function newChat() {
     if (isStreaming) stop();
-    stopAnyVoiceNote();
     setMessages([{ ...GREETING, time: Date.now() }]);
     setInput("");
     setPendingImage(null);
@@ -377,14 +357,6 @@ export default function App() {
                         : "sent"
                       : null
                   }
-                  voice={
-                    ttsAvailable &&
-                    m.role === "assistant" &&
-                    !streaming &&
-                    m.content.trim()
-                      ? m.content
-                      : null
-                  }
                 />
               );
             })}
@@ -472,17 +444,7 @@ function ArifAvatar({ className }) {
   );
 }
 
-function Message({
-  role,
-  content,
-  image,
-  song,
-  time,
-  streaming,
-  thinking,
-  tick,
-  voice,
-}) {
+function Message({ role, content, image, song, time, streaming, thinking, tick }) {
   const isUser = role === "user";
   return (
     <div className={`msg ${isUser ? "user" : "assistant"}`}>
@@ -502,7 +464,6 @@ function Message({
         )}
 
         {song && <SongCard song={song} />}
-        {voice && <VoiceNote text={voice} />}
 
         {!thinking && (
           <span className="meta">
@@ -515,143 +476,6 @@ function Message({
       </div>
     </div>
   );
-}
-
-// --- Voice notes ----------------------------------------------------------
-// Only one can play at a time, so the module keeps a handle on whichever is
-// currently going and stops it when another starts.
-let activeVoice = null;
-
-function stopAnyVoiceNote() {
-  if (activeVoice) activeVoice();
-}
-
-// WhatsApp-style player: tap to hear Arif's reply. The audio is fetched
-// lazily on the first tap and then reused, so nothing is generated (or
-// billed) for replies she never plays.
-function VoiceNote({ text }) {
-  const [status, setStatus] = useState("idle"); // idle | loading | playing | paused | error
-  const [progress, setProgress] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const audioRef = useRef(null);
-  const urlRef = useRef(null);
-  const bars = useRef(barHeights(text)).current;
-
-  // Tear down on unmount so a cleared chat doesn't keep playing.
-  useEffect(() => {
-    return () => {
-      if (audioRef.current) audioRef.current.pause();
-      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-      if (activeVoice && audioRef.current) activeVoice = null;
-    };
-  }, []);
-
-  async function ensureAudio() {
-    if (audioRef.current) return audioRef.current;
-
-    setStatus("loading");
-    const res = await fetch(`${API_BASE}/api/tts`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-    if (!res.ok) throw new Error("tts failed");
-
-    const url = URL.createObjectURL(await res.blob());
-    urlRef.current = url;
-    const audio = new Audio(url);
-
-    audio.onloadedmetadata = () => {
-      if (Number.isFinite(audio.duration)) setDuration(audio.duration);
-    };
-    audio.ontimeupdate = () => {
-      setElapsed(audio.currentTime);
-      if (audio.duration) setProgress(audio.currentTime / audio.duration);
-    };
-    audio.onended = () => {
-      setStatus("idle");
-      setProgress(0);
-      setElapsed(0);
-      activeVoice = null;
-    };
-    audio.onerror = () => setStatus("error");
-
-    audioRef.current = audio;
-    return audio;
-  }
-
-  async function toggle() {
-    try {
-      if (status === "playing") {
-        audioRef.current?.pause();
-        setStatus("paused");
-        activeVoice = null;
-        return;
-      }
-
-      const audio = await ensureAudio();
-      stopAnyVoiceNote(); // whatever else was playing, stop it
-      activeVoice = () => {
-        audio.pause();
-        setStatus("paused");
-        activeVoice = null;
-      };
-      await audio.play();
-      setStatus("playing");
-    } catch {
-      setStatus("error");
-    }
-  }
-
-  if (status === "error") {
-    return <div className="voice-note error">voice abhi nahi chal raha 😅</div>;
-  }
-
-  const shown = status === "playing" || status === "paused" ? elapsed : duration;
-
-  return (
-    <div className="voice-note">
-      <button
-        className="voice-play"
-        onClick={toggle}
-        aria-label={status === "playing" ? "Pause" : "Play voice note"}
-      >
-        {status === "loading" ? "…" : status === "playing" ? "❚❚" : "▶"}
-      </button>
-      <span className="voice-wave">
-        {bars.map((h, i) => (
-          <i
-            key={i}
-            className={i / bars.length <= progress ? "on" : undefined}
-            style={{ height: `${h}%` }}
-          />
-        ))}
-      </span>
-      <span className="voice-time">{formatDuration(shown)}</span>
-    </div>
-  );
-}
-
-// Deterministic bar heights, so a given reply always draws the same
-// waveform instead of reshuffling on every render.
-function barHeights(seed, n = 26) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) {
-    h = (Math.imul(h ^ seed.charCodeAt(i), 16777619) >>> 0);
-  }
-  const out = [];
-  for (let i = 0; i < n; i++) {
-    h = (Math.imul(h, 1103515245) + 12345) >>> 0;
-    out.push(28 + (h % 72));
-  }
-  return out;
-}
-
-function formatDuration(seconds) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
-  const s = Math.floor(seconds);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 // Thumbnail + play button that swaps to a live YouTube embed on click —
