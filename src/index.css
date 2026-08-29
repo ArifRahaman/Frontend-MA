@@ -701,6 +701,60 @@ body {
 }
 
 /* ===================================================
+   Voice (Deepgram TTS)
+   =================================================== */
+.voice-toggle {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-dim);
+  font-size: 15px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.voice-toggle:hover {
+  border-color: var(--border-glow);
+  background: rgba(255, 255, 255, 0.06);
+}
+.voice-toggle.on {
+  color: var(--accent);
+  box-shadow: var(--glow-sm);
+}
+
+.bubble-speak {
+  position: absolute;
+  bottom: -10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 12px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 0.15s ease, transform 0.15s ease, color 0.15s ease;
+}
+.bubble:hover .bubble-speak,
+.bubble-speak.speaking {
+  opacity: 1;
+  transform: translateY(0);
+}
+.bubble-speak.speaking {
+  color: var(--accent);
+  border-color: var(--border-glow);
+  box-shadow: var(--glow-sm);
+}
+
+/* ===================================================
    Mobile
    =================================================== */
 @media (max-width: 740px) {

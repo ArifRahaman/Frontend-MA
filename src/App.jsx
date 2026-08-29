@@ -20,9 +20,76 @@ export default function App() {
   const [messages, setMessages] = useState([GREETING]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(() => {
+    try {
+      return localStorage.getItem("arif-voice") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const [speakingIndex, setSpeakingIndex] = useState(null);
   const scrollRef = useRef(null);
   const textareaRef = useRef(null);
   const abortRef = useRef(null);
+  const audioRef = useRef(null);
+
+  function stopSpeaking() {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    setSpeakingIndex(null);
+  }
+
+  // Ask the backend for Deepgram audio of `text` and play it. `index` (the
+  // message's position in the list) just drives the little speaking
+  // indicator on that bubble.
+  async function speak(text, index) {
+    if (!text || !text.trim()) return;
+    stopSpeaking();
+
+    try {
+      const res = await fetch(`${API_BASE}/api/tts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) return; // TTS not configured, or Deepgram hiccup — fail quietly
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      setSpeakingIndex(index);
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        if (audioRef.current === audio) audioRef.current = null;
+        setSpeakingIndex((cur) => (cur === index ? null : cur));
+      };
+      audio.onerror = () => {
+        URL.revokeObjectURL(url);
+        if (audioRef.current === audio) audioRef.current = null;
+        setSpeakingIndex((cur) => (cur === index ? null : cur));
+      };
+      await audio.play();
+    } catch {
+      // ignore — voice is a nice-to-have, never block the chat over it
+    }
+  }
+
+  function toggleVoice() {
+    setVoiceOn((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("arif-voice", next ? "on" : "off");
+      } catch {
+        // ignore storage failures (private browsing, etc.)
+      }
+      if (!next) stopSpeaking();
+      return next;
+    });
+  }
 
   // auto-scroll to bottom on new content
   useEffect(() => {
@@ -46,13 +113,16 @@ export default function App() {
 
     const userMsg = { role: "user", content: text };
     const history = [...messages, userMsg];
+    const assistantIndex = history.length; // where the new reply will sit
 
     setMessages([...history, { role: "assistant", content: "" }]);
     setInput("");
     setIsStreaming(true);
+    stopSpeaking();
 
     const controller = new AbortController();
     abortRef.current = controller;
+    let assistantText = "";
 
     try {
       const res = await fetch(`${API_BASE}/api/chat`, {
@@ -91,6 +161,7 @@ export default function App() {
             const json = JSON.parse(payload);
             if (json.error) throw new Error(json.error);
             if (json.delta) {
+              assistantText += json.delta;
               setMessages((prev) => {
                 const next = [...prev];
                 next[next.length - 1] = {
@@ -105,6 +176,10 @@ export default function App() {
             if (e.message && !e.message.includes("JSON")) throw e;
           }
         }
+      }
+
+      if (voiceOn && assistantText.trim()) {
+        speak(assistantText, assistantIndex);
       }
     } catch (err) {
       if (err.name === "AbortError") {
@@ -132,10 +207,12 @@ export default function App() {
 
   function stop() {
     abortRef.current?.abort();
+    stopSpeaking();
   }
 
   function newChat() {
     if (isStreaming) stop();
+    stopSpeaking();
     setMessages([GREETING]);
     setInput("");
   }
@@ -200,6 +277,13 @@ export default function App() {
             {isStreaming && (
               <span className="live-dot">typing…</span>
             )}
+            <button
+              className={`voice-toggle${voiceOn ? " on" : ""}`}
+              onClick={toggleVoice}
+              title={voiceOn ? "Voice on — click to mute" : "Voice off — click to unmute"}
+            >
+              {voiceOn ? "🔊" : "🔇"}
+            </button>
           </div>
         </header>
 
@@ -229,6 +313,13 @@ export default function App() {
                   isStreaming &&
                   i === messages.length - 1 &&
                   m.role === "assistant"
+                }
+                speaking={speakingIndex === i}
+                onSpeak={
+                  m.role === "assistant" && m.content.trim()
+                    ? () =>
+                        speakingIndex === i ? stopSpeaking() : speak(m.content, i)
+                    : undefined
                 }
               />
             ))}
@@ -273,7 +364,7 @@ export default function App() {
   );
 }
 
-function Message({ role, content, streaming }) {
+function Message({ role, content, streaming, speaking, onSpeak }) {
   const isUser = role === "user";
   return (
     <div className={`msg ${isUser ? "user" : "assistant"}`}>
@@ -281,6 +372,15 @@ function Message({ role, content, streaming }) {
       <div className="bubble">
         {renderContent(content)}
         {streaming && <span className="cursor" />}
+        {onSpeak && !streaming && (
+          <button
+            className={`bubble-speak${speaking ? " speaking" : ""}`}
+            onClick={onSpeak}
+            title={speaking ? "Playing…" : "Play this reply"}
+          >
+            {speaking ? "◼" : "🔊"}
+          </button>
+        )}
       </div>
     </div>
   );
